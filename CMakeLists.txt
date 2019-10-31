@@ -15,14 +15,18 @@ if(NOT hasParent)
 endif ()
 
 SET_MIN_VERSIONS()
-set(LibName template_lib)
+set(LibName render_meshmodrender)
 project(${LibName})
 
 file(GLOB_RECURSE Src CONFIGURE_DEPENDS include/*.h include/*.hpp src/*.c src/*.cpp)
 set(Deps
     	al2o3_platform
-	al2o3_memory
-	al2o3_thread
+		al2o3_memory
+		al2o3_thread
+		al2o3_cadt
+		al2o3_handle
+		render_basics_interface
+		render_meshmod
 )
 
 ADD_LIB2(${LibName} "${Src}" "${Deps}")
