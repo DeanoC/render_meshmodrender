@@ -30,6 +30,7 @@ static uint32_t PickVisibleColour(uint32_t primitiveId) {
 	primitiveId = primitiveId % ColourTableSize;
 	return ColourTable[primitiveId];
 }
+
 void VertexPosNormal::UpdateIfNeeded(MeshMod_MeshRenderable* mr) {
 	ASSERT(MeshMod_MeshHandleIsValid(mr->MMMesh));
 
@@ -79,7 +80,7 @@ void VertexPosNormal::UpdateIfNeeded(MeshMod_MeshRenderable* mr) {
 			Render_BufferVertexDesc const ibDesc {
 					vertexCount,
 					sizeof(VertexPosNormal),
-					true
+					false
 			};
 			mr->gpuVertexBuffer = Render_BufferCreateVertex(mr->renderer, &ibDesc);
 			mr->gpuVertexBufferCount = vertexCount;
@@ -111,11 +112,13 @@ void VertexPosColour::UpdateIfNeeded(MeshMod_MeshRenderable* mr) {
 
 	if(mr->storedPosHash != actualPosHash || mr->storedNormalHash != actualNormalHash) {
 		// has changed position or normal so regenerate
+		mr->storedPosHash = actualPosHash;
+		mr->storedNormalHash = actualNormalHash;
 
 		// if we need to triangulate clone to not change the original mesh
 		bool const isTriangleBRepOnly = (!MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonQuadBRepTag)) &&
 				(!MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonConvexBRepTag));
-		MeshMod_MeshHandle clone;
+		MeshMod_MeshHandle clone = {0};
 		if (isTriangleBRepOnly) {
 			clone = mr->MMMesh;
 		} else {
@@ -149,17 +152,17 @@ void VertexPosColour::UpdateIfNeeded(MeshMod_MeshRenderable* mr) {
 		if(vertexCount > mr->gpuVertexBufferCount) {
 			Render_BufferDestroy(mr->renderer, mr->gpuVertexBuffer);
 
-			Render_BufferVertexDesc const ibDesc {
+			Render_BufferVertexDesc const vbDesc {
 					vertexCount,
 					sizeof(VertexPosColour),
-					true
+					false
 			};
-			mr->gpuVertexBuffer = Render_BufferCreateVertex(mr->renderer, &ibDesc);
+			mr->gpuVertexBuffer = Render_BufferCreateVertex(mr->renderer, &vbDesc);
 			mr->gpuVertexBufferCount = vertexCount;
 		}
 
 		if(vertexCount) {
-			// upload the instance data
+			// upload the vertex data
 			Render_BufferUpdateDesc instanceUpdate = {
 					CADT_VectorData(mr->cpuVertexBuffer),
 					0,
