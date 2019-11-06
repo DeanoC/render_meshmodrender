@@ -28,16 +28,20 @@ struct MeshModRender_Manager {
 	union {
 		Render_GpuView view;
 		uint8_t spacer[UNIFORM_BUFFER_MIN_SIZE];
-	} uniforms;
-	Render_BufferHandle uniformBuffer;
+	} viewUniforms;
+	Render_BufferHandle viewUniformBuffer;
 };
 
 static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
-	static char const *const VertexShader = "cbuffer uniformBlock : register(b0, space1)\n"
+	static char const *const VertexShader = "cbuffer View : register(b0, space1)\n"
 																					"{\n"
 																					"\tfloat4x4 worldToViewMatrix;\n"
 																					"\tfloat4x4 viewToNDCMatrix;\n"
 																					"\tfloat4x4 worldToNDCMatrix;\n"
+																					"};\n"
+																					"cbuffer LocalToWorld : register(b1, space3)\n"
+																					"{\n"
+																					"\tfloat4x4 localToWorldMatrix;\n"
 																					"};\n"
 																					"struct VSInput\n"
 																					"{\n"
@@ -54,7 +58,8 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 																					"{\n"
 																					"    VSOutput result;\n"
 																					"\n"
-																					"\tresult.Position = mul(worldToNDCMatrix, input.Position);\n"
+										 											"\tresult.Position = mul(localToWorldMatrix, input.Position);\n"
+																					"\tresult.Position = mul(worldToNDCMatrix, result.Position);\n"
 																					"\tresult.Colour = input.Colour;\n"
 																					"\treturn result;\n"
 																					"}";
@@ -136,11 +141,11 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 		return false;
 	}
 	Render_DescriptorDesc params[1];
-	params[0].name = "uniformBlock";
+	params[0].name = "View";
 	params[0].type = Render_DT_BUFFER;
-	params[0].buffer = manager->uniformBuffer;
+	params[0].buffer = manager->viewUniformBuffer;
 	params[0].offset = 0;
-	params[0].size = sizeof(manager->uniforms);
+	params[0].size = sizeof(manager->viewUniforms);
 	Render_DescriptorPresetFrequencyUpdated(material.descriptorSet, 0, 1, params);
 
 	return true;
@@ -157,12 +162,12 @@ AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_Rendere
 	manager->meshManager = Handle_Manager32Create(sizeof(MeshMod_MeshRenderable), 1024*16, 32, false);
 
 	static Render_BufferUniformDesc const ubDesc{
-			sizeof(manager->uniforms),
+			sizeof(manager->viewUniforms),
 			true
 	};
 
-	manager->uniformBuffer = Render_BufferCreateUniform(manager->renderer, &ubDesc);
-	if (!Render_BufferHandleIsValid(manager->uniformBuffer)) {
+	manager->viewUniformBuffer = Render_BufferCreateUniform(manager->renderer, &ubDesc);
+	if (!Render_BufferHandleIsValid(manager->viewUniformBuffer)) {
 		return nullptr;
 	}
 
@@ -188,7 +193,7 @@ AL2O3_EXTERN_C void MeshModRender_ManagerDestroy( MeshModRender_Manager* manager
 		Render_ShaderDestroy(manager->renderer, material.shader);
 	}
 
-	Render_BufferDestroy(manager->renderer, manager->uniformBuffer);
+	Render_BufferDestroy(manager->renderer, manager->viewUniformBuffer);
 
 	Handle_Manager32Destroy(manager->meshManager);
 	MEMORY_FREE(manager);
@@ -204,6 +209,7 @@ AL2O3_EXTERN_C MeshModRender_MeshHandle MeshModRender_MeshCreate(MeshModRender_M
 	mesh->renderStyle = MMR_MAX; // force a change
 
 	MeshModRender_MeshSetStyle(manager, mrhandle, MMR_RS_FACE_COLOURS);
+
 
 	return mrhandle;
 }
@@ -242,6 +248,29 @@ AL2O3_EXTERN_C void MeshModRender_MeshSetStyle(MeshModRender_Manager* manager, M
 
 		mesh->cpuVertexBuffer = CADT_VectorCreate(sizeOfVertex);
 		mesh->renderStyle = style;
+
+		MeshModRender_RenderStyleMaterial const& material = manager->styleMaterial[mesh->renderStyle];
+
+		static Render_BufferUniformDesc const ubDesc{
+				sizeof(mesh->localUniforms),
+				true
+		};
+		mesh->localUniformBuffer = Render_BufferCreateUniform(manager->renderer, &ubDesc);
+
+		Render_DescriptorSetDesc const setDesc = {
+				material.rootSignature,
+				Render_DUF_PER_DRAW,
+				1
+		};
+		mesh->descriptorSet = Render_DescriptorSetCreate(manager->renderer, &setDesc);
+		Render_DescriptorDesc params[1];
+		params[0].name = "LocalToWorld";
+		params[0].type = Render_DT_BUFFER;
+		params[0].buffer = mesh->localUniformBuffer;
+		params[0].offset = 0;
+		params[0].size = sizeof(mesh->localUniforms);
+		Render_DescriptorPresetFrequencyUpdated(mesh->descriptorSet, 0, 1, params);
+
 	}
 
 }
@@ -264,25 +293,35 @@ AL2O3_EXTERN_C void MeshModRender_MeshUpdate(MeshModRender_Manager* manager, Mes
 
 AL2O3_EXTERN_C void MeshModRender_ManagerSetView(MeshModRender_Manager* manager, Render_GpuView* view) {
 	// upload the uniforms
-	memcpy(&manager->uniforms, view, sizeof(Render_GpuView));
+	memcpy(&manager->viewUniforms, view, sizeof(Render_GpuView));
 	Render_BufferUpdateDesc uniformUpdate = {
-			&manager->uniforms,
+			&manager->viewUniforms,
 			0,
-			sizeof(manager->uniforms)
+			sizeof(manager->viewUniforms)
 	};
-	Render_BufferUpload(manager->uniformBuffer, &uniformUpdate);
-
+	Render_BufferUpload(manager->viewUniformBuffer, &uniformUpdate);
 }
 
 AL2O3_EXTERN_C void MeshModRender_MeshRender(MeshModRender_Manager* manager,
 																						 Render_GraphicsEncoderHandle encoder,
-																						 MeshModRender_MeshHandle mrhandle) {
+																						 MeshModRender_MeshHandle mrhandle,
+																						 Math_Mat4F localMatrix) {
 
 	auto mesh = (MeshMod_MeshRenderable*) Handle_Manager32HandleToPtr(manager->meshManager, mrhandle.handle);
+
+	// upload the uniforms
+	memcpy(&mesh->localUniforms, localMatrix.v, sizeof(Math_Mat4F));
+	Render_BufferUpdateDesc uniformUpdate = {
+			&mesh->localUniforms,
+			0,
+			sizeof(mesh->localUniforms)
+	};
+	Render_BufferUpload(mesh->localUniformBuffer, &uniformUpdate);
 
 	MeshModRender_RenderStyleMaterial const& material = manager->styleMaterial[mesh->renderStyle];
 
 	Render_GraphicsEncoderBindDescriptorSet(encoder, material.descriptorSet, 0);
+	Render_GraphicsEncoderBindDescriptorSet(encoder, mesh->descriptorSet, 0);
 	Render_GraphicsEncoderBindVertexBuffer(encoder, mesh->gpuVertexBuffer, 0);
 	Render_GraphicsEncoderBindPipeline(encoder, material.pipeline);
 	Render_GraphicsEncoderDraw(encoder, mesh->gpuVertexBufferCount, 0);

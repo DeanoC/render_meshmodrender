@@ -5,18 +5,28 @@
 #include "render_meshmod/mesh.h"
 #include "render_meshmodrender/render.h"
 #include "al2o3_cmath/vector.h"
+#include "al2o3_cmath/matrix.h"
+#include "render_basics/view.h"
 
 struct MeshMod_MeshRenderable {
 	MeshMod_MeshHandle MMMesh;
 	MeshModRender_RenderStyle renderStyle;
 
 	Render_RendererHandle renderer;
+
 	CADT_VectorHandle cpuVertexBuffer;
 	Render_BufferHandle gpuVertexBuffer;
+	uint32_t gpuVertexBufferCount;
+
 	uint64_t storedPosHash;
 	uint64_t storedNormalHash;
 
-	uint32_t gpuVertexBufferCount;
+	Render_DescriptorSetHandle descriptorSet;
+	union {
+		Math_Mat4F localToWorld;
+		uint8_t spacer[UNIFORM_BUFFER_MIN_SIZE];
+	} localUniforms;
+	Render_BufferHandle localUniformBuffer;
 };
 
 struct VertexPosNormal {

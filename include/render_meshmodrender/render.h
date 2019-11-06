@@ -4,6 +4,7 @@
 #include "al2o3_handle/handle.h"
 #include "render_meshmod/mesh.h"
 #include "render_basics/api.h"
+#include "al2o3_cmath/matrix.h"
 
 enum MeshModRender_RenderStyle {
 	MMR_RS_FACE_COLOURS,
@@ -25,5 +26,8 @@ AL2O3_EXTERN_C void MeshModRender_MeshDestroy(MeshModRender_Manager* manager, Me
 
 AL2O3_EXTERN_C void MeshModRender_MeshSetStyle(MeshModRender_Manager* manager, MeshModRender_MeshHandle mrhandle, MeshModRender_RenderStyle style);
 AL2O3_EXTERN_C void MeshModRender_MeshUpdate(MeshModRender_Manager* manager, MeshModRender_MeshHandle mrhandle);
-AL2O3_EXTERN_C void MeshModRender_MeshRender(MeshModRender_Manager* manager, Render_GraphicsEncoderHandle encoder, MeshModRender_MeshHandle mrhandle);
+AL2O3_EXTERN_C void MeshModRender_MeshRender(MeshModRender_Manager* manager,
+		Render_GraphicsEncoderHandle encoder,
+		MeshModRender_MeshHandle mrhandle,
+		Math_Mat4F localMatrix);
 
