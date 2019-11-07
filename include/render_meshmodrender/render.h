@@ -8,6 +8,7 @@
 
 enum MeshModRender_RenderStyle {
 	MMR_RS_FACE_COLOURS,
+	MMR_RS_TRIANGLE_COLOURS,
 	MMR_RS_NORMAL,
 
 	MMR_MAX

@@ -17,6 +17,8 @@ struct MeshModRender_RenderStyleMaterial {
 	Render_RootSignatureHandle rootSignature;
 	Render_PipelineHandle pipeline;
 	Render_DescriptorSetHandle descriptorSet;
+
+	bool copyDontFree;
 };
 
 struct MeshModRender_Manager {
@@ -42,7 +44,7 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 																					"cbuffer LocalToWorld : register(b1, space3)\n"
 																					"{\n"
 																					"\tfloat4x4 localToWorldMatrix;\n"
-																					"};\n"
+																					"};\n
 																					"struct VSInput\n"
 																					"{\n"
 																					"\tfloat4 Position : POSITION;\n"
@@ -86,6 +88,7 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 		VFile_Close(vfile);
 		return false;
 	}
+
 	MeshModRender_RenderStyleMaterial& material = manager->styleMaterial[MMR_RS_FACE_COLOURS];
 
 	material.shader = Render_CreateShaderFromVFile(manager->renderer, vfile, "VS_main", ffile, "FS_main");
@@ -148,6 +151,10 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 	params[0].size = sizeof(manager->viewUniforms);
 	Render_DescriptorPresetFrequencyUpdated(material.descriptorSet, 0, 1, params);
 
+	MeshModRender_RenderStyleMaterial& materialCopy = manager->styleMaterial[MMR_RS_TRIANGLE_COLOURS];
+	materialCopy = material;
+	materialCopy.copyDontFree = true;
+
 	return true;
 }
 
@@ -187,6 +194,9 @@ AL2O3_EXTERN_C void MeshModRender_ManagerDestroy( MeshModRender_Manager* manager
 
 	for (uint32_t i = 0u; i < MMR_MAX; ++i) {
 		MeshModRender_RenderStyleMaterial& material = manager->styleMaterial[i];
+		if(material.copyDontFree) {
+			continue;
+		}
 		Render_DescriptorSetDestroy(manager->renderer, material.descriptorSet);
 		Render_PipelineDestroy(manager->renderer, material.pipeline);
 		Render_RootSignatureDestroy(manager->renderer, material.rootSignature);
@@ -217,6 +227,8 @@ AL2O3_EXTERN_C MeshModRender_MeshHandle MeshModRender_MeshCreate(MeshModRender_M
 AL2O3_EXTERN_C void MeshModRender_MeshDestroy(MeshModRender_Manager* manager, MeshModRender_MeshHandle mrhandle) {
 	auto mesh = (MeshMod_MeshRenderable*) Handle_Manager32HandleToPtr(manager->meshManager, mrhandle.handle);
 
+	Render_DescriptorSetDestroy(mesh->renderer, mesh->descriptorSet);
+	Render_BufferDestroy(mesh->renderer, mesh->localUniformBuffer);
 	CADT_VectorDestroy(mesh->cpuVertexBuffer);
 	Render_BufferDestroy(mesh->renderer, mesh->gpuVertexBuffer);
 
@@ -229,6 +241,9 @@ AL2O3_EXTERN_C void MeshModRender_MeshSetStyle(MeshModRender_Manager* manager, M
 		// destroy old buffers
 		CADT_VectorDestroy(mesh->cpuVertexBuffer);
 		Render_BufferDestroy(mesh->renderer, mesh->gpuVertexBuffer);
+		Render_DescriptorSetDestroy(mesh->renderer, mesh->descriptorSet);
+		Render_BufferDestroy(mesh->renderer, mesh->localUniformBuffer);
+
 		mesh->gpuVertexBufferCount = 0;
 		mesh->storedPosHash = 0;
 		mesh->storedNormalHash = 0;
@@ -236,12 +251,14 @@ AL2O3_EXTERN_C void MeshModRender_MeshSetStyle(MeshModRender_Manager* manager, M
 		uint32_t sizeOfVertex = 0;
 		switch(style) {
 			case MMR_RS_FACE_COLOURS:
+			case MMR_RS_TRIANGLE_COLOURS:
 				sizeOfVertex = sizeof(VertexPosColour);
 				break;
+
 			case MMR_RS_NORMAL:
 				sizeOfVertex = sizeof(VertexPosNormal);
 				break;
-			default:
+			case MMR_MAX:
 				break;
 		}
 		ASSERT(sizeOfVertex);
@@ -280,12 +297,15 @@ AL2O3_EXTERN_C void MeshModRender_MeshUpdate(MeshModRender_Manager* manager, Mes
 
 	switch(mesh->renderStyle) {
 		case MMR_RS_FACE_COLOURS:
-			VertexPosColour::UpdateIfNeeded(mesh);
+			VertexPosColour::UpdateIfNeededFaceColours(mesh);
+			break;
+		case MMR_RS_TRIANGLE_COLOURS:
+			VertexPosColour::UpdateIfNeededTriColours(mesh);
 			break;
 		case MMR_RS_NORMAL:
 			VertexPosNormal::UpdateIfNeeded(mesh);
 			break;
-		default:
+		case MMR_MAX:
 			break;
 	}
 
