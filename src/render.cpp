@@ -44,7 +44,7 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 																					"cbuffer LocalToWorld : register(b1, space3)\n"
 																					"{\n"
 																					"\tfloat4x4 localToWorldMatrix;\n"
-																					"};\n
+																					"};\n"
 																					"struct VSInput\n"
 																					"{\n"
 																					"\tfloat4 Position : POSITION;\n"
