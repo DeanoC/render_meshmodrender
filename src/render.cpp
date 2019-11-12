@@ -330,7 +330,7 @@ AL2O3_EXTERN_C void MeshModRender_MeshRender(MeshModRender_Manager* manager,
 	auto mesh = (MeshMod_MeshRenderable*) Handle_Manager32HandleToPtr(manager->meshManager, mrhandle.handle);
 
 	// upload the uniforms
-	memcpy(&mesh->localUniforms, localMatrix.v, sizeof(Math_Mat4F));
+	memcpy(&mesh->localUniforms, Math_TransposeMat4F(localMatrix).v, sizeof(Math_Mat4F));
 	Render_BufferUpdateDesc uniformUpdate = {
 			&mesh->localUniforms,
 			0,
