@@ -44,6 +44,7 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 																					"cbuffer LocalToWorld : register(b1, space3)\n"
 																					"{\n"
 																					"\tfloat4x4 localToWorldMatrix;\n"
+																					"\tfloat4x4 localToWorldMatrixTranspose;\n"
 																					"};\n"
 																					"struct VSInput\n"
 																					"{\n"
@@ -158,6 +159,128 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 	return true;
 }
 
+static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
+	static char const *const VertexShader = "cbuffer View : register(b0, space1)\n"
+																					"{\n"
+																					"\tfloat4x4 worldToViewMatrix;\n"
+																					"\tfloat4x4 viewToNDCMatrix;\n"
+																					"\tfloat4x4 worldToNDCMatrix;\n"
+																					"};\n"
+																					"cbuffer LocalToWorld : register(b1, space3)\n"
+																					"{\n"
+																					"\tfloat4x4 localToWorldMatrix;\n"
+																					"\tfloat4x4 localToWorldMatrixTranspose;\n"
+																					"};\n"
+																					"struct VSInput\n"
+																					"{\n"
+																					"\tfloat4 Position : POSITION;\n"
+																					"\tfloat3 Normal   : NORMAL;\n"
+																					"};\n"
+																					"\n"
+																					"struct VSOutput {\n"
+																					"\tfloat4 Position : SV_POSITION;\n"
+																					"\tfloat4 Colour   : COLOR;\n"
+																					"};\n"
+																					"\n"
+																					"VSOutput VS_main(VSInput input)\n"
+																					"{\n"
+																					"    VSOutput result;\n"
+																					"\n"
+																					"\tresult.Position = mul(localToWorldMatrix, input.Position);\n"
+																					"\tfloat4 worldNormal = mul(localToWorldMatrixTranspose, float4(input.Normal,0));\n"
+																					"\tresult.Position = mul(worldToNDCMatrix, result.Position);\n"
+																					"\tresult.Colour = (worldNormal*0.5f)+0.5f;\n"
+																					"\treturn result;\n"
+																					"}";
+
+	static char const *const FragmentShader = "struct FSInput {\n"
+																						"\tfloat4 Position : SV_POSITION;\n"
+																						"\tfloat4 Colour   : COLOR;\n"
+																						"};\n"
+																						"\n"
+																						"float4 FS_main(FSInput input) : SV_Target\n"
+																						"{\n"
+																						"\treturn input.Colour;\n"
+																						"}\n";
+
+	static char const *const vertEntryPoint = "VS_main";
+	static char const *const fragEntryPoint = "FS_main";
+
+	VFile_Handle vfile = VFile_FromMemory(VertexShader, strlen(VertexShader) + 1, false);
+	if (!vfile) {
+		return false;
+	}
+	VFile_Handle ffile = VFile_FromMemory(FragmentShader, strlen(FragmentShader) + 1, false);
+	if (!ffile) {
+		VFile_Close(vfile);
+		return false;
+	}
+
+	MeshModRender_RenderStyleMaterial& material = manager->styleMaterial[MMR_RS_NORMAL];
+
+	material.shader = Render_CreateShaderFromVFile(manager->renderer, vfile, "VS_main", ffile, "FS_main");
+
+	VFile_Close(vfile);
+	VFile_Close(ffile);
+
+	if (!Render_ShaderHandleIsValid(material.shader)) {
+		return false;
+	}
+
+	Render_RootSignatureDesc rootSignatureDesc{};
+	rootSignatureDesc.shaderCount = 1;
+	rootSignatureDesc.shaders = &material.shader;
+	rootSignatureDesc.staticSamplerCount = 0;
+	material.rootSignature = Render_RootSignatureCreate(manager->renderer, &rootSignatureDesc);
+	if (!Render_RootSignatureHandleIsValid(material.rootSignature)) {
+		return false;
+	}
+
+	TinyImageFormat colourFormats[] = { colourFormat };
+
+	Render_GraphicsPipelineDesc gfxPipeDesc{};
+	gfxPipeDesc.shader = material.shader;
+	gfxPipeDesc.rootSignature = material.rootSignature;
+	gfxPipeDesc.vertexLayout = Render_GetStockVertexLayout(manager->renderer, Render_SVL_3D_NORMAL);
+	gfxPipeDesc.blendState = Render_GetStockBlendState(manager->renderer, Render_SBS_OPAQUE);
+	if(depthFormat == TinyImageFormat_UNDEFINED) {
+		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_IGNORE);
+	} else {
+		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_READWRITE_LESS);
+	}
+	gfxPipeDesc.rasteriserState = Render_GetStockRasterisationState(manager->renderer, Render_SRS_BACKCULL);
+	gfxPipeDesc.colourRenderTargetCount = 1;
+	gfxPipeDesc.colourFormats = colourFormats;
+	gfxPipeDesc.depthStencilFormat = depthFormat;
+	gfxPipeDesc.sampleCount = 1;
+	gfxPipeDesc.sampleQuality = 0;
+	gfxPipeDesc.primitiveTopo = Render_PT_TRI_LIST;
+	material.pipeline = Render_GraphicsPipelineCreate(manager->renderer, &gfxPipeDesc);
+	if (!Render_PipelineHandleIsValid(material.pipeline)) {
+		return false;
+	}
+
+	Render_DescriptorSetDesc const setDesc = {
+			material.rootSignature,
+			Render_DUF_PER_FRAME,
+			1
+	};
+
+	material.descriptorSet = Render_DescriptorSetCreate(manager->renderer, &setDesc);
+	if (!Render_DescriptorSetHandleIsValid(material.descriptorSet)) {
+		return false;
+	}
+	Render_DescriptorDesc params[1];
+	params[0].name = "View";
+	params[0].type = Render_DT_BUFFER;
+	params[0].buffer = manager->viewUniformBuffer;
+	params[0].offset = 0;
+	params[0].size = sizeof(manager->viewUniforms);
+	Render_DescriptorPresetFrequencyUpdated(material.descriptorSet, 0, 1, params);
+
+	return true;
+}
+
 
 AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_RendererHandle renderer, TinyImageFormat colourDestFormat, TinyImageFormat depthDestFormat) {
 	auto manager = (MeshModRender_Manager*) MEMORY_CALLOC(1, sizeof(MeshModRender_Manager));
@@ -179,6 +302,12 @@ AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_Rendere
 	}
 
 	if( !CreatePosColour(manager, colourDestFormat, depthDestFormat) )
+	{
+		MeshModRender_ManagerDestroy(manager);
+		return nullptr;
+	}
+
+	if( !CreatePosNormal(manager, colourDestFormat, depthDestFormat) )
 	{
 		MeshModRender_ManagerDestroy(manager);
 		return nullptr;
@@ -325,12 +454,14 @@ AL2O3_EXTERN_C void MeshModRender_ManagerSetView(MeshModRender_Manager* manager,
 AL2O3_EXTERN_C void MeshModRender_MeshRender(MeshModRender_Manager* manager,
 																						 Render_GraphicsEncoderHandle encoder,
 																						 MeshModRender_MeshHandle mrhandle,
-																						 Math_Mat4F localMatrix) {
+																						 Math_Mat4F localMatrix,
+																						 Math_Mat4F inverseLocalMatrix) {
 
 	auto mesh = (MeshMod_MeshRenderable*) Handle_Manager32HandleToPtr(manager->meshManager, mrhandle.handle);
 
 	// upload the uniforms
-	memcpy(&mesh->localUniforms, Math_TransposeMat4F(localMatrix).v, sizeof(Math_Mat4F));
+	memcpy(&mesh->localUniforms.localToWorld, Math_TransposeMat4F(localMatrix).v, sizeof(Math_Mat4F));
+	memcpy(&mesh->localUniforms.localToWorldTranspose, inverseLocalMatrix.v, sizeof(Math_Mat4F));
 	Render_BufferUpdateDesc uniformUpdate = {
 			&mesh->localUniforms,
 			0,

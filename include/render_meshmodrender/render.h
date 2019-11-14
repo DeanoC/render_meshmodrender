@@ -30,5 +30,6 @@ AL2O3_EXTERN_C void MeshModRender_MeshUpdate(MeshModRender_Manager* manager, Mes
 AL2O3_EXTERN_C void MeshModRender_MeshRender(MeshModRender_Manager* manager,
 		Render_GraphicsEncoderHandle encoder,
 		MeshModRender_MeshHandle mrhandle,
-		Math_Mat4F localMatrix);
+		Math_Mat4F localMatrix,
+	  Math_Mat4F inverseLocalMatrix);
 

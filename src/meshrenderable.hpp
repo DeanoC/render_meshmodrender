@@ -23,7 +23,11 @@ struct MeshMod_MeshRenderable {
 
 	Render_DescriptorSetHandle descriptorSet;
 	union {
-		Math_Mat4F localToWorld;
+		struct {
+			Math_Mat4F localToWorld;
+			Math_Mat4F localToWorldTranspose;
+		};
+
 		uint8_t spacer[UNIFORM_BUFFER_MIN_SIZE];
 	} localUniforms;
 	Render_BufferHandle localUniformBuffer;

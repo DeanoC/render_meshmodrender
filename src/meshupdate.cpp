@@ -50,6 +50,8 @@ void VertexPosNormal::UpdateIfNeeded(MeshMod_MeshRenderable* mr) {
 
 	if(mr->storedPosHash != actualPosHash || mr->storedNormalHash != actualNormalHash) {
 		// has changed position or normal so regenerate
+		mr->storedPosHash = actualPosHash;
+		mr->storedNormalHash = actualNormalHash;
 
 		// if we need to triangulate clone to not change the original mesh
 		bool const isTriangleBRepOnly = (!MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonQuadBRepTag)) &&
@@ -117,12 +119,10 @@ void VertexPosColour::UpdateIfNeededTriColours(MeshMod_MeshRenderable *mr){
 	using namespace Math;
 
 	uint64_t const actualPosHash = MeshMod_MeshVertexTagGetOrComputeHash(mr->MMMesh, MeshMod_VertexPositionTag);
-	uint64_t const actualNormalHash = MeshMod_MeshVertexTagGetOrComputeHash(mr->MMMesh, MeshMod_VertexNormalTag);
 
-	if(mr->storedPosHash != actualPosHash || mr->storedNormalHash != actualNormalHash) {
+	if(mr->storedPosHash != actualPosHash) {
 		// has changed position or normal so regenerate
 		mr->storedPosHash = actualPosHash;
-		mr->storedNormalHash = actualNormalHash;
 
 		// if we need to triangulate clone to not change the original mesh
 		bool const isTriangleBRepOnly = (!MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonQuadBRepTag)) &&
