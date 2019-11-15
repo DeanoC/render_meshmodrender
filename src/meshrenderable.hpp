@@ -47,3 +47,11 @@ struct VertexPosColour {
 	static void UpdateIfNeededFaceColours(MeshMod_MeshRenderable* mr);
 	static void UpdateIfNeededTriColours(MeshMod_MeshRenderable* mr);
 };
+
+struct VertexPosNormalColour {
+	Math_Vec3F position;
+	Math_Vec3F normal;
+	uint32_t colour;
+
+	static void UpdateIfNeeded(MeshMod_MeshRenderable* mr);
+};

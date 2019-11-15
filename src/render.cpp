@@ -184,6 +184,79 @@ static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colo
 	return true;
 }
 
+static bool CreateDot(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
+	VFile::ScopedFile vfile = VFile::FromFile("resources/dot_vertex.hlsl", Os_FM_Read);
+	if (!vfile) {
+		return false;
+	}
+	VFile::ScopedFile ffile = VFile::FromFile("resources/copycolour_fragment.hlsl", Os_FM_Read);
+	if (!ffile) {
+		VFile_Close(vfile);
+		return false;
+	}
+
+	MeshModRender_RenderStyleMaterial& material = manager->styleMaterial[MMR_RS_DOT];
+
+	material.shader = Render_CreateShaderFromVFile(manager->renderer, vfile, "VS_main", ffile, "FS_main");
+
+	if (!Render_ShaderHandleIsValid(material.shader)) {
+		return false;
+	}
+
+	Render_RootSignatureDesc rootSignatureDesc{};
+	rootSignatureDesc.shaderCount = 1;
+	rootSignatureDesc.shaders = &material.shader;
+	rootSignatureDesc.staticSamplerCount = 0;
+	material.rootSignature = Render_RootSignatureCreate(manager->renderer, &rootSignatureDesc);
+	if (!Render_RootSignatureHandleIsValid(material.rootSignature)) {
+		return false;
+	}
+
+	TinyImageFormat colourFormats[] = { colourFormat };
+
+	Render_GraphicsPipelineDesc gfxPipeDesc{};
+	gfxPipeDesc.shader = material.shader;
+	gfxPipeDesc.rootSignature = material.rootSignature;
+	gfxPipeDesc.vertexLayout = Render_GetStockVertexLayout(manager->renderer, Render_SVL_3D_NORMAL_COLOUR);
+	gfxPipeDesc.blendState = Render_GetStockBlendState(manager->renderer, Render_SBS_OPAQUE);
+	if(depthFormat == TinyImageFormat_UNDEFINED) {
+		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_IGNORE);
+	} else {
+		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_READWRITE_LESS);
+	}
+	gfxPipeDesc.rasteriserState = Render_GetStockRasterisationState(manager->renderer, Render_SRS_BACKCULL);
+	gfxPipeDesc.colourRenderTargetCount = 1;
+	gfxPipeDesc.colourFormats = colourFormats;
+	gfxPipeDesc.depthStencilFormat = depthFormat;
+	gfxPipeDesc.sampleCount = 1;
+	gfxPipeDesc.sampleQuality = 0;
+	gfxPipeDesc.primitiveTopo = Render_PT_TRI_LIST;
+	material.pipeline = Render_GraphicsPipelineCreate(manager->renderer, &gfxPipeDesc);
+	if (!Render_PipelineHandleIsValid(material.pipeline)) {
+		return false;
+	}
+
+	Render_DescriptorSetDesc const setDesc = {
+			material.rootSignature,
+			Render_DUF_PER_FRAME,
+			1
+	};
+
+	material.descriptorSet = Render_DescriptorSetCreate(manager->renderer, &setDesc);
+	if (!Render_DescriptorSetHandleIsValid(material.descriptorSet)) {
+		return false;
+	}
+	Render_DescriptorDesc params[1];
+	params[0].name = "View";
+	params[0].type = Render_DT_BUFFER;
+	params[0].buffer = manager->viewUniformBuffer;
+	params[0].offset = 0;
+	params[0].size = sizeof(manager->viewUniforms);
+	Render_DescriptorPresetFrequencyUpdated(material.descriptorSet, 0, 1, params);
+
+	return true;
+}
+
 
 AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_RendererHandle renderer, TinyImageFormat colourDestFormat, TinyImageFormat depthDestFormat) {
 	auto manager = (MeshModRender_Manager*) MEMORY_CALLOC(1, sizeof(MeshModRender_Manager));
@@ -211,6 +284,11 @@ AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_Rendere
 	}
 
 	if( !CreatePosNormal(manager, colourDestFormat, depthDestFormat) )
+	{
+		MeshModRender_ManagerDestroy(manager);
+		return nullptr;
+	}
+	if( !CreateDot(manager, colourDestFormat, depthDestFormat) )
 	{
 		MeshModRender_ManagerDestroy(manager);
 		return nullptr;
@@ -290,6 +368,10 @@ AL2O3_EXTERN_C void MeshModRender_MeshSetStyle(MeshModRender_Manager* manager, M
 			case MMR_RS_NORMAL:
 				sizeOfVertex = sizeof(VertexPosNormal);
 				break;
+			case MMR_RS_DOT:
+				sizeOfVertex = sizeof(VertexPosNormalColour);
+				break;
+
 			case MMR_MAX:
 				break;
 		}
@@ -336,6 +418,9 @@ AL2O3_EXTERN_C void MeshModRender_MeshUpdate(MeshModRender_Manager* manager, Mes
 			break;
 		case MMR_RS_NORMAL:
 			VertexPosNormal::UpdateIfNeeded(mesh);
+			break;
+		case MMR_RS_DOT:
+			VertexPosNormalColour::UpdateIfNeeded(mesh);
 			break;
 		case MMR_MAX:
 			break;

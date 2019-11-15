@@ -267,3 +267,85 @@ void VertexPosColour::UpdateIfNeededFaceColours(MeshMod_MeshRenderable *mr){
 		}
 	}
 }
+
+void VertexPosNormalColour::UpdateIfNeeded(MeshMod_MeshRenderable* mr) {
+	ASSERT(MeshMod_MeshHandleIsValid(mr->MMMesh));
+
+	using namespace Math;
+
+	uint64_t const actualPosHash = MeshMod_MeshVertexTagGetOrComputeHash(mr->MMMesh, MeshMod_VertexPositionTag);
+	uint64_t const actualNormalHash = MeshMod_MeshVertexTagGetOrComputeHash(mr->MMMesh, MeshMod_VertexNormalTag);
+
+	if(mr->storedPosHash != actualPosHash || mr->storedNormalHash != actualNormalHash) {
+		// has changed position or normal so regenerate
+		mr->storedPosHash = actualPosHash;
+		mr->storedNormalHash = actualNormalHash;
+
+		// if we need to triangulate clone to not change the original mesh
+		bool const isTriangleBRepOnly = (!MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonQuadBRepTag)) &&
+				(!MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonConvexBRepTag));
+		MeshMod_MeshHandle clone;
+		if (isTriangleBRepOnly) {
+			clone = mr->MMMesh;
+		} else {
+			clone = MeshMod_MeshClone(mr->MMMesh);
+			MeshMod_MeshTrianglate(clone);
+		}
+
+		// TODO compacted fast path for meshmod...
+
+		// clear old data
+		CADT_VectorResize(mr->cpuVertexBuffer, 0);
+
+		bool const hasPolygonId = MeshMod_MeshPolygonTagExists(mr->MMMesh, MeshMod_PolygonIdTag);
+		uint32_t primitiveId = 0;
+
+		MeshMod_PolygonHandle phandle = MeshMod_MeshPolygonTagIterate(clone, MeshMod_PolygonTriBRepTag, NULL);
+		while (MeshMod_MeshPolygonIsValid(clone, phandle)) {
+			auto tri = MeshMod_MeshPolygonTriBRepTagHandleToPtr(clone, phandle, 0);
+
+			if(hasPolygonId) {
+				primitiveId = *MeshMod_MeshPolygonU32TagHandleToPtr(clone, phandle, MeshMod_PolygonIdUserTag);
+			}
+
+			for (int i = 0; i < 3; ++i) {
+				VertexPosNormalColour vert;
+				MeshMod_VertexHandle vh = MeshMod_MeshEdgeHalfEdgeTagHandleToPtr(clone, tri->edge[i], 0)->vertex;
+				memcpy(&vert.position, MeshMod_MeshVertexPositionTagHandleToPtr(clone, vh, 0), sizeof(Vec3F));
+				memcpy(&vert.normal, MeshMod_MeshVertexNormalTagHandleToPtr(clone, vh, 0), sizeof(Vec3F));
+				vert.colour = PickVisibleColour(primitiveId);
+				CADT_VectorPushElement(mr->cpuVertexBuffer, &vert);
+			}
+
+			phandle = MeshMod_MeshPolygonTagIterate(clone, MeshMod_PolygonTriBRepTag, &phandle);
+			primitiveId++;
+		}
+
+		uint32_t const vertexCount = (uint32_t) CADT_VectorSize(mr->cpuVertexBuffer);
+		if(vertexCount > mr->gpuVertexBufferCount) {
+			Render_BufferDestroy(mr->renderer, mr->gpuVertexBuffer);
+
+			Render_BufferVertexDesc const ibDesc {
+					vertexCount,
+					sizeof(VertexPosNormalColour),
+					false
+			};
+			mr->gpuVertexBuffer = Render_BufferCreateVertex(mr->renderer, &ibDesc);
+			mr->gpuVertexBufferCount = vertexCount;
+		}
+
+		if(vertexCount) {
+			// upload the instance data
+			Render_BufferUpdateDesc instanceUpdate = {
+					CADT_VectorData(mr->cpuVertexBuffer),
+					0,
+					sizeof(VertexPosNormalColour) * vertexCount
+			};
+			Render_BufferUpload(mr->gpuVertexBuffer, &instanceUpdate);
+		}
+
+		if (!isTriangleBRepOnly) {
+			MeshMod_MeshDestroy(clone);
+		}
+	}
+}
