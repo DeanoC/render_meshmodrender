@@ -1,6 +1,6 @@
 #include "al2o3_platform/platform.h"
 #include "al2o3_memory/memory.h"
-#include "al2o3_vfile/vfile.h"
+#include "al2o3_vfile/vfile.hpp"
 #include "render_meshmodrender/render.h"
 #include "render_basics/shader.h"
 #include "render_basics/rootsignature.h"
@@ -35,67 +35,19 @@ struct MeshModRender_Manager {
 };
 
 static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
-	static char const *const VertexShader = "cbuffer View : register(b0, space1)\n"
-																					"{\n"
-																					"\tfloat4x4 worldToViewMatrix;\n"
-																					"\tfloat4x4 viewToNDCMatrix;\n"
-																					"\tfloat4x4 worldToNDCMatrix;\n"
-																					"};\n"
-																					"cbuffer LocalToWorld : register(b1, space3)\n"
-																					"{\n"
-																					"\tfloat4x4 localToWorldMatrix;\n"
-																					"\tfloat4x4 localToWorldMatrixTranspose;\n"
-																					"};\n"
-																					"struct VSInput\n"
-																					"{\n"
-																					"\tfloat4 Position : POSITION;\n"
-																					"\tfloat4 Colour   : COLOR;\n"
-																					"};\n"
-																					"\n"
-																					"struct VSOutput {\n"
-																					"\tfloat4 Position : SV_POSITION;\n"
-																					"\tfloat4 Colour   : COLOR;\n"
-																					"};\n"
-																					"\n"
-																					"VSOutput VS_main(VSInput input)\n"
-																					"{\n"
-																					"    VSOutput result;\n"
-																					"\n"
-										 											"\tresult.Position = mul(localToWorldMatrix, input.Position);\n"
-																					"\tresult.Position = mul(worldToNDCMatrix, result.Position);\n"
-																					"\tresult.Colour = input.Colour;\n"
-																					"\treturn result;\n"
-																					"}";
 
-	static char const *const FragmentShader = "struct FSInput {\n"
-																						"\tfloat4 Position : SV_POSITION;\n"
-																						"\tfloat4 Colour   : COLOR;\n"
-																						"};\n"
-																						"\n"
-																						"float4 FS_main(FSInput input) : SV_Target\n"
-																						"{\n"
-																						"\treturn input.Colour;\n"
-																						"}\n";
-
-	static char const *const vertEntryPoint = "VS_main";
-	static char const *const fragEntryPoint = "FS_main";
-
-	VFile_Handle vfile = VFile_FromMemory(VertexShader, strlen(VertexShader) + 1, false);
+	VFile::ScopedFile vfile = VFile::FromFile("resources/poscolour_vertex.hlsl", Os_FM_Read);
 	if (!vfile) {
 		return false;
 	}
-	VFile_Handle ffile = VFile_FromMemory(FragmentShader, strlen(FragmentShader) + 1, false);
+	VFile::ScopedFile ffile = VFile::FromFile("resources/copycolour_fragment.hlsl", Os_FM_Read);
 	if (!ffile) {
-		VFile_Close(vfile);
 		return false;
 	}
 
 	MeshModRender_RenderStyleMaterial& material = manager->styleMaterial[MMR_RS_FACE_COLOURS];
 
 	material.shader = Render_CreateShaderFromVFile(manager->renderer, vfile, "VS_main", ffile, "FS_main");
-
-	VFile_Close(vfile);
-	VFile_Close(ffile);
 
 	if (!Render_ShaderHandleIsValid(material.shader)) {
 		return false;
@@ -160,57 +112,11 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 }
 
 static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
-	static char const *const VertexShader = "cbuffer View : register(b0, space1)\n"
-																					"{\n"
-																					"\tfloat4x4 worldToViewMatrix;\n"
-																					"\tfloat4x4 viewToNDCMatrix;\n"
-																					"\tfloat4x4 worldToNDCMatrix;\n"
-																					"};\n"
-																					"cbuffer LocalToWorld : register(b1, space3)\n"
-																					"{\n"
-																					"\tfloat4x4 localToWorldMatrix;\n"
-																					"\tfloat4x4 localToWorldMatrixTranspose;\n"
-																					"};\n"
-																					"struct VSInput\n"
-																					"{\n"
-																					"\tfloat4 Position : POSITION;\n"
-																					"\tfloat3 Normal   : NORMAL;\n"
-																					"};\n"
-																					"\n"
-																					"struct VSOutput {\n"
-																					"\tfloat4 Position : SV_POSITION;\n"
-																					"\tfloat4 Colour   : COLOR;\n"
-																					"};\n"
-																					"\n"
-																					"VSOutput VS_main(VSInput input)\n"
-																					"{\n"
-																					"    VSOutput result;\n"
-																					"\n"
-																					"\tresult.Position = mul(localToWorldMatrix, input.Position);\n"
-																					"\tfloat4 worldNormal = mul(localToWorldMatrixTranspose, float4(input.Normal,0));\n"
-																					"\tresult.Position = mul(worldToNDCMatrix, result.Position);\n"
-																					"\tresult.Colour = (worldNormal*0.5f)+0.5f;\n"
-																					"\treturn result;\n"
-																					"}";
-
-	static char const *const FragmentShader = "struct FSInput {\n"
-																						"\tfloat4 Position : SV_POSITION;\n"
-																						"\tfloat4 Colour   : COLOR;\n"
-																						"};\n"
-																						"\n"
-																						"float4 FS_main(FSInput input) : SV_Target\n"
-																						"{\n"
-																						"\treturn input.Colour;\n"
-																						"}\n";
-
-	static char const *const vertEntryPoint = "VS_main";
-	static char const *const fragEntryPoint = "FS_main";
-
-	VFile_Handle vfile = VFile_FromMemory(VertexShader, strlen(VertexShader) + 1, false);
+	VFile::ScopedFile vfile = VFile::FromFile("resources/posnormal_vertex.hlsl", Os_FM_Read);
 	if (!vfile) {
 		return false;
 	}
-	VFile_Handle ffile = VFile_FromMemory(FragmentShader, strlen(FragmentShader) + 1, false);
+	VFile::ScopedFile ffile = VFile::FromFile("resources/copycolour_fragment.hlsl", Os_FM_Read);
 	if (!ffile) {
 		VFile_Close(vfile);
 		return false;
@@ -219,9 +125,6 @@ static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colo
 	MeshModRender_RenderStyleMaterial& material = manager->styleMaterial[MMR_RS_NORMAL];
 
 	material.shader = Render_CreateShaderFromVFile(manager->renderer, vfile, "VS_main", ffile, "FS_main");
-
-	VFile_Close(vfile);
-	VFile_Close(ffile);
 
 	if (!Render_ShaderHandleIsValid(material.shader)) {
 		return false;
