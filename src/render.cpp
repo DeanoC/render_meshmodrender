@@ -34,7 +34,7 @@ struct MeshModRender_Manager {
 	Render_BufferHandle viewUniformBuffer;
 };
 
-static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
+static bool CreatePosColour(MeshModRender_Manager *manager, Render_ROPLayout const* targetLayout) {
 
 	VFile::ScopedFile vfile = VFile::FromFile("resources/poscolour_vertex.hlsl", Os_FM_Read);
 	if (!vfile) {
@@ -62,14 +62,14 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 		return false;
 	}
 
-	TinyImageFormat colourFormats[] = { colourFormat };
+	TinyImageFormat colourFormats[] = { targetLayout->colourFormats[0] };
 
 	Render_GraphicsPipelineDesc gfxPipeDesc{};
 	gfxPipeDesc.shader = material.shader;
 	gfxPipeDesc.rootSignature = material.rootSignature;
 	gfxPipeDesc.vertexLayout = Render_GetStockVertexLayout(manager->renderer, Render_SVL_3D_COLOUR);
 	gfxPipeDesc.blendState = Render_GetStockBlendState(manager->renderer, Render_SBS_OPAQUE);
-	if(depthFormat == TinyImageFormat_UNDEFINED) {
+	if(targetLayout->depthFormat == TinyImageFormat_UNDEFINED) {
 		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_IGNORE);
 	} else {
 		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_READWRITE_LESS);
@@ -77,7 +77,7 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 	gfxPipeDesc.rasteriserState = Render_GetStockRasterisationState(manager->renderer, Render_SRS_BACKCULL);
 	gfxPipeDesc.colourRenderTargetCount = 1;
 	gfxPipeDesc.colourFormats = colourFormats;
-	gfxPipeDesc.depthStencilFormat = depthFormat;
+	gfxPipeDesc.depthStencilFormat = targetLayout->depthFormat;
 	gfxPipeDesc.sampleCount = 1;
 	gfxPipeDesc.sampleQuality = 0;
 	gfxPipeDesc.primitiveTopo = Render_PT_TRI_LIST;
@@ -111,7 +111,7 @@ static bool CreatePosColour(MeshModRender_Manager *manager, TinyImageFormat colo
 	return true;
 }
 
-static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
+static bool CreatePosNormal(MeshModRender_Manager *manager, Render_ROPLayout const* targetLayout) {
 	VFile::ScopedFile vfile = VFile::FromFile("resources/posnormal_vertex.hlsl", Os_FM_Read);
 	if (!vfile) {
 		return false;
@@ -139,14 +139,14 @@ static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colo
 		return false;
 	}
 
-	TinyImageFormat colourFormats[] = { colourFormat };
+	TinyImageFormat colourFormats[] = { targetLayout->colourFormats[0] };
 
 	Render_GraphicsPipelineDesc gfxPipeDesc{};
 	gfxPipeDesc.shader = material.shader;
 	gfxPipeDesc.rootSignature = material.rootSignature;
 	gfxPipeDesc.vertexLayout = Render_GetStockVertexLayout(manager->renderer, Render_SVL_3D_NORMAL);
 	gfxPipeDesc.blendState = Render_GetStockBlendState(manager->renderer, Render_SBS_OPAQUE);
-	if(depthFormat == TinyImageFormat_UNDEFINED) {
+	if(targetLayout->depthFormat == TinyImageFormat_UNDEFINED) {
 		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_IGNORE);
 	} else {
 		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_READWRITE_LESS);
@@ -154,7 +154,7 @@ static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colo
 	gfxPipeDesc.rasteriserState = Render_GetStockRasterisationState(manager->renderer, Render_SRS_BACKCULL);
 	gfxPipeDesc.colourRenderTargetCount = 1;
 	gfxPipeDesc.colourFormats = colourFormats;
-	gfxPipeDesc.depthStencilFormat = depthFormat;
+	gfxPipeDesc.depthStencilFormat = targetLayout->depthFormat;
 	gfxPipeDesc.sampleCount = 1;
 	gfxPipeDesc.sampleQuality = 0;
 	gfxPipeDesc.primitiveTopo = Render_PT_TRI_LIST;
@@ -184,7 +184,7 @@ static bool CreatePosNormal(MeshModRender_Manager *manager, TinyImageFormat colo
 	return true;
 }
 
-static bool CreateDot(MeshModRender_Manager *manager, TinyImageFormat colourFormat, TinyImageFormat depthFormat) {
+static bool CreateDot(MeshModRender_Manager *manager, Render_ROPLayout const* targetLayout) {
 	VFile::ScopedFile vfile = VFile::FromFile("resources/dot_vertex.hlsl", Os_FM_Read);
 	if (!vfile) {
 		return false;
@@ -212,14 +212,14 @@ static bool CreateDot(MeshModRender_Manager *manager, TinyImageFormat colourForm
 		return false;
 	}
 
-	TinyImageFormat colourFormats[] = { colourFormat };
+	TinyImageFormat colourFormats[] = { targetLayout->colourFormats[0] };
 
 	Render_GraphicsPipelineDesc gfxPipeDesc{};
 	gfxPipeDesc.shader = material.shader;
 	gfxPipeDesc.rootSignature = material.rootSignature;
 	gfxPipeDesc.vertexLayout = Render_GetStockVertexLayout(manager->renderer, Render_SVL_3D_NORMAL_COLOUR);
 	gfxPipeDesc.blendState = Render_GetStockBlendState(manager->renderer, Render_SBS_OPAQUE);
-	if(depthFormat == TinyImageFormat_UNDEFINED) {
+	if(targetLayout->depthFormat == TinyImageFormat_UNDEFINED) {
 		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_IGNORE);
 	} else {
 		gfxPipeDesc.depthState = Render_GetStockDepthState(manager->renderer, Render_SDS_READWRITE_LESS);
@@ -227,7 +227,7 @@ static bool CreateDot(MeshModRender_Manager *manager, TinyImageFormat colourForm
 	gfxPipeDesc.rasteriserState = Render_GetStockRasterisationState(manager->renderer, Render_SRS_BACKCULL);
 	gfxPipeDesc.colourRenderTargetCount = 1;
 	gfxPipeDesc.colourFormats = colourFormats;
-	gfxPipeDesc.depthStencilFormat = depthFormat;
+	gfxPipeDesc.depthStencilFormat = targetLayout->depthFormat;
 	gfxPipeDesc.sampleCount = 1;
 	gfxPipeDesc.sampleQuality = 0;
 	gfxPipeDesc.primitiveTopo = Render_PT_TRI_LIST;
@@ -258,7 +258,7 @@ static bool CreateDot(MeshModRender_Manager *manager, TinyImageFormat colourForm
 }
 
 
-AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_RendererHandle renderer, TinyImageFormat colourDestFormat, TinyImageFormat depthDestFormat) {
+AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_RendererHandle renderer, Render_ROPLayout const* targetLayout) {
 	auto manager = (MeshModRender_Manager*) MEMORY_CALLOC(1, sizeof(MeshModRender_Manager));
 	if(!manager) {
 		return nullptr;
@@ -277,19 +277,16 @@ AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_Rendere
 		return nullptr;
 	}
 
-	if( !CreatePosColour(manager, colourDestFormat, depthDestFormat) )
-	{
+	if( !CreatePosColour(manager, targetLayout) ) {
 		MeshModRender_ManagerDestroy(manager);
 		return nullptr;
 	}
 
-	if( !CreatePosNormal(manager, colourDestFormat, depthDestFormat) )
-	{
+	if( !CreatePosNormal(manager, targetLayout) ) {
 		MeshModRender_ManagerDestroy(manager);
 		return nullptr;
 	}
-	if( !CreateDot(manager, colourDestFormat, depthDestFormat) )
-	{
+	if( !CreateDot(manager, targetLayout) ) {
 		MeshModRender_ManagerDestroy(manager);
 		return nullptr;
 	}

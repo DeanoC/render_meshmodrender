@@ -19,7 +19,7 @@ typedef struct MeshModRender_Manager MeshModRender_Manager;
 typedef struct { Handle_Handle32 handle; } MeshModRender_MeshHandle;
 typedef struct Render_GpuView Render_GpuView;
 
-AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_RendererHandle renderer, TinyImageFormat colourDestFormat, TinyImageFormat depthDestFormat);
+AL2O3_EXTERN_C MeshModRender_Manager* MeshModRender_ManagerCreate(Render_RendererHandle renderer, Render_ROPLayout const* targetLayout);
 AL2O3_EXTERN_C void MeshModRender_ManagerDestroy( MeshModRender_Manager* manager);
 AL2O3_EXTERN_C void MeshModRender_ManagerSetView(MeshModRender_Manager* manager, Render_GpuView* view);
 
